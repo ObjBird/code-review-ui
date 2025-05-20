@@ -59,16 +59,10 @@
    devServer: {
      // ...其他配置
      proxy: {
-       '/': {
+       '/api': {
          target: 'http://localhost:8787',
-         changeOrigin: true,
-         secure: false,
-         bypass: function(req, res, proxyOptions) {
-           // 只代理POST请求，其他请求（如静态资源）绕过代理
-           if (req.method !== 'POST') {
-             return req.url;
-           }
-         }
+         pathRewrite: { '^/api': '' },
+         changeOrigin: true
        }
      }
    }
@@ -78,7 +72,7 @@
    ```javascript
    // 开发环境使用代理，生产环境使用实际URL
    const API_URL = process.env.NODE_ENV === 'development' 
-     ? '/' // 使用相对路径，将通过代理转发
+     ? '/api' // 使用/api前缀，将通过代理转发
      : (process.env.API_URL || 'https://code-review-agent.your-workers-subdomain.workers.dev');
    
    // API调用
@@ -102,23 +96,19 @@
 
 3. **调试技巧**:
    - 使用浏览器开发者工具的网络面板监视请求
-   - 查看请求是否被正确代理到Worker
+   - 请求会显示为发送到 `/api`
+   - 实际上会被代理到 http://localhost:8787
    - 检查Worker控制台输出是否有错误信息
 
 ## 常见问题
 
-### Worker未运行
+### 请求卡住或无响应
 
-如果收到错误"Failed to fetch" 或 "Network Error":
-- 确保Worker服务器在 http://localhost:8787 运行
-- 检查 `.dev.vars` 文件是否包含有效的OpenAI API密钥
-
-### 代理不工作
-
-如果代理似乎不起作用:
-1. 确认webpack配置中的代理设置正确
-2. 确认在React组件中使用了正确的API_URL（开发环境使用'/'）
-3. 重启两个开发服务器
+如果请求卡住或没有响应：
+- 查看 [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) 获取详细的排障指南
+- 检查浏览器控制台和网络面板
+- 确认Worker服务器正在运行
+- 检查环境变量设置
 
 ### CORS错误
 
