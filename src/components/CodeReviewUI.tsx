@@ -9,8 +9,10 @@ interface CodeReviewResult {
   score?: number;
 }
 
-// 环境变量配置，可以在不同环境使用不同的API地址
-const API_URL = process.env.API_URL || 'https://code-review-agent.您的workers子域名.workers.dev';
+// 环境变量配置，开发环境中使用代理，生产环境使用实际URL
+const API_URL = process.env.NODE_ENV === 'development' 
+  ? '/' // 使用相对路径，将通过代理转发到http://localhost:8787
+  : (process.env.API_URL || 'https://code-review-agent.您的workers子域名.workers.dev');
 
 const CodeReviewUI = () => {
   const [code, setCode] = useState<string>('');
@@ -29,8 +31,8 @@ const CodeReviewUI = () => {
       setLoading(true);
       setError(null);
       
-      // 调用Cloudflare Worker部署的API
-      // Worker直接接收POST请求，不需要额外的端点路径
+      // 调用API
+      // 在开发环境中，这个请求会被代理到http://localhost:8787
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
