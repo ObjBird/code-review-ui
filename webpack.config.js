@@ -59,7 +59,7 @@ module.exports = (env, argv) => {
       new CleanWebpackPlugin(),
       new HtmlWebpackPlugin({
         template: 'public/index.html',
-        favicon: 'public/favicon.svg', // 更改为SVG图标
+        // favicon选项已移除
         minify: isProduction
           ? {
               removeComments: true,
@@ -91,7 +91,7 @@ module.exports = (env, argv) => {
               from: 'public',
               to: '',
               globOptions: {
-                ignore: ['**/index.html', '**/favicon.svg'],
+                ignore: ['**/index.html'],
               },
             },
             { from: '_redirects', to: '', noErrorOnMissing: true },
