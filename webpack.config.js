@@ -131,6 +131,20 @@ module.exports = (env, argv) => {
       port: 3000,
       hot: true,
       open: true,
+      proxy: {
+        '/': {
+          target: 'http://localhost:8787',
+          changeOrigin: true,
+          secure: false,
+          // 设置后会影响本地开发中的静态资源，所以需要过滤
+          bypass: function(req, res, proxyOptions) {
+            // 只代理API请求，其他请求绕过代理
+            if (req.method !== 'POST') {
+              return req.url;
+            }
+          }
+        }
+      }
     },
     performance: {
       hints: isProduction ? 'warning' : false,
