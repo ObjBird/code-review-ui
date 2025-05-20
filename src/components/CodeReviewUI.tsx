@@ -11,7 +11,7 @@ interface CodeReviewResult {
 
 // 环境变量配置，开发环境中使用代理，生产环境使用实际URL
 const API_URL = process.env.NODE_ENV === 'development' 
-  ? '/' // 使用相对路径，将通过代理转发到http://localhost:8787
+  ? '/api' // 使用/api前缀，将通过代理转发到http://localhost:8787
   : (process.env.API_URL || 'https://code-review-agent.您的workers子域名.workers.dev');
 
 const CodeReviewUI = () => {
@@ -31,6 +31,8 @@ const CodeReviewUI = () => {
       setLoading(true);
       setError(null);
       
+      console.log('发送请求到:', API_URL);
+      
       // 调用API
       // 在开发环境中，这个请求会被代理到http://localhost:8787
       const response = await fetch(API_URL, {
@@ -46,8 +48,10 @@ const CodeReviewUI = () => {
       }
 
       const data = await response.json();
+      console.log('收到响应:', data);
       setResult(data);
     } catch (err) {
+      console.error('请求错误:', err);
       setError(`请求失败: ${err instanceof Error ? err.message : String(err)}`);
       setResult(null);
     } finally {
