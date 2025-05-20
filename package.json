@@ -36,6 +36,7 @@
     "build": "webpack --mode production",
     "analyze": "webpack --mode production --analyze"
   },
+  "proxy": "http://localhost:8787",
   "browserslist": {
     "production": [
       ">0.2%",
