@@ -14,15 +14,13 @@ ERROR in Error: HtmlWebpackPlugin: could not load file /path/to/project/public/f
 
 ### 解决方案：
 
-1. **现已使用SVG图标**：
-   - 我们已将配置更新为使用 `public/favicon.svg` 文件
-   - 此SVG图标是一个简单的"C"字符，代表"Code Review"
+1. **已移除 favicon 选项**：
+   - 我们已从webpack配置中移除了favicon选项
+   - 现在构建过程不会尝试加载任何favicon文件
 
-2. **如果还遇到问题**，您可以尝试：
-   - 确保 `public` 目录存在
-   - 确保 `public/favicon.svg` 文件存在
-   - 如果您想使用自己的图标，替换 `public/favicon.svg` 文件
-   - 或修改 `webpack.config.js` 移除 favicon 设置
+2. **如果想添加自己的图标**：
+   - 您可以手动在HTML模板中添加图标引用
+   - 或重新添加webpack配置中的favicon选项（确保文件存在）
 
 ## 缺少目录或文件
 
