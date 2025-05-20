@@ -30,6 +30,7 @@ const CodeReviewUI = () => {
       setError(null);
       
       // 调用Cloudflare Worker部署的API
+      // Worker直接接收POST请求，不需要额外的端点路径
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
