@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // 定义代码审查结果的接口
 interface CodeReviewResult {
@@ -41,7 +43,7 @@ const CodeReviewUI = () => {
           messages: [
             {
               role: "user",
-              content: `请对以下代码进行审查并提供改进建议：\n\n${code}`
+              content: `请对以下代码进行审查并提供改进建议：\n\n\`\`\`\n${code}\n\`\`\``
             }
           ] 
         }),
@@ -55,7 +57,6 @@ const CodeReviewUI = () => {
       const reader = response.body?.getReader();
       let decoder = new TextDecoder();
       let data = '';
-      let partialChunk = '';
 
       if (reader) {
         try {
@@ -105,6 +106,77 @@ const CodeReviewUI = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // 自定义Markdown组件
+  const MarkdownComponents = {
+    // 自定义代码块渲染
+    code({ node, inline, className, children, ...props }: any) {
+      const match = /language-(\w+)/.exec(className || '');
+      
+      if (!inline && match) {
+        return (
+          <div className="overflow-auto rounded-md my-2">
+            <pre className={`bg-gray-800 text-white overflow-auto p-3 rounded-md text-sm ${className}`} {...props}>
+              <code className={`language-${match[1]}`}>{children}</code>
+            </pre>
+          </div>
+        );
+      }
+      
+      return inline ? (
+        <code className="bg-gray-100 text-red-600 px-1 py-0.5 rounded-sm text-sm" {...props}>
+          {children}
+        </code>
+      ) : (
+        <pre className="bg-gray-100 overflow-auto p-3 rounded-md my-2 text-sm" {...props}>
+          <code>{children}</code>
+        </pre>
+      );
+    },
+    // 自定义标题样式
+    h1: ({ node, children, ...props }: any) => (
+      <h1 className="text-2xl font-bold my-4" {...props}>{children}</h1>
+    ),
+    h2: ({ node, children, ...props }: any) => (
+      <h2 className="text-xl font-bold my-3" {...props}>{children}</h2>
+    ),
+    h3: ({ node, children, ...props }: any) => (
+      <h3 className="text-lg font-bold my-2" {...props}>{children}</h3>
+    ),
+    // 自定义列表样式
+    ul: ({ node, children, ...props }: any) => (
+      <ul className="list-disc pl-5 my-2" {...props}>{children}</ul>
+    ),
+    ol: ({ node, children, ...props }: any) => (
+      <ol className="list-decimal pl-5 my-2" {...props}>{children}</ol>
+    ),
+    li: ({ node, children, ...props }: any) => (
+      <li className="my-1" {...props}>{children}</li>
+    ),
+    // 自定义段落样式
+    p: ({ node, children, ...props }: any) => (
+      <p className="my-2" {...props}>{children}</p>
+    ),
+    // 自定义表格样式
+    table: ({ node, children, ...props }: any) => (
+      <div className="overflow-auto my-2">
+        <table className="min-w-full border border-gray-300" {...props}>{children}</table>
+      </div>
+    ),
+    thead: ({ node, children, ...props }: any) => (
+      <thead className="bg-gray-100" {...props}>{children}</thead>
+    ),
+    th: ({ node, children, ...props }: any) => (
+      <th className="py-2 px-4 border-b border-gray-300 text-left font-semibold" {...props}>{children}</th>
+    ),
+    td: ({ node, children, ...props }: any) => (
+      <td className="py-2 px-4 border-b border-gray-300" {...props}>{children}</td>
+    ),
+    // 自定义块引用样式
+    blockquote: ({ node, children, ...props }: any) => (
+      <blockquote className="border-l-4 border-gray-300 pl-4 py-1 my-2 text-gray-700 italic" {...props}>{children}</blockquote>
+    ),
   };
 
   return (
@@ -169,23 +241,16 @@ const CodeReviewUI = () => {
 
           <div className="mb-4">
             <h3 className="font-medium mb-2 text-gray-700">审查结果:</h3>
-            <div className="text-gray-700 bg-white p-3 rounded-md border border-gray-200 whitespace-pre-wrap">
-              {result.message}
+            <div className="bg-white p-4 rounded-md border border-gray-200">
+              <ReactMarkdown 
+                components={MarkdownComponents} 
+                remarkPlugins={[remarkGfm]}
+                className="prose max-w-none"
+              >
+                {result.message}
+              </ReactMarkdown>
             </div>
           </div>
-
-          {result.suggestions && result.suggestions.length > 0 && (
-            <div>
-              <h3 className="font-medium mb-2 text-gray-700">主要建议:</h3>
-              <ul className="list-disc pl-5 space-y-2">
-                {result.suggestions.map((suggestion, index) => (
-                  <li key={index} className="text-gray-700">
-                    {suggestion}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       )}
     </div>
