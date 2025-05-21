@@ -12,7 +12,7 @@ interface CodeReviewResult {
 // 环境变量配置，开发环境中使用代理，生产环境使用实际URL
 const API_URL = process.env.NODE_ENV === 'development' 
   ? '/api' // 使用/api前缀，将通过代理转发到http://localhost:8787
-  : (process.env.API_URL || 'https://code-review-agent.您的workers子域名.workers.dev');
+  : (process.env.API_URL || 'https://ccc.zhanglong116033.workers.dev');
 
 const CodeReviewUI = () => {
   const [code, setCode] = useState<string>('');
