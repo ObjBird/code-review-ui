@@ -131,10 +131,10 @@ module.exports = (env, argv) => {
       port: 3000,
       hot: true,
       open: true,
-      // 简化代理配置，减少出错可能
+      // 代理配置，开发环境将'/api'请求转发到Worker URL
       proxy: {
         '/api': {
-          target: 'http://localhost:8787',
+          target: 'https://ccc.zhanglong116033.workers.dev/',
           pathRewrite: { '^/api': '' },
           changeOrigin: true
         }
