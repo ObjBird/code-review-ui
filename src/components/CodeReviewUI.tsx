@@ -69,6 +69,30 @@ const CodeReviewUI = () => {
   // 处理JSON流响应
   const parseStreamResponse = (text: string): string => {
     try {
+      // 检查是否是非流式响应的普通文本
+      try {
+        // 尝试解析为JSON
+        const jsonObj = JSON.parse(text);
+        // 如果是简单的JSON对象，尝试从中提取文本
+        if (jsonObj.content) return jsonObj.content;
+        if (jsonObj.message) return jsonObj.message;
+        if (jsonObj.text) return jsonObj.text;
+        if (jsonObj.choices && jsonObj.choices[0]) {
+          const choice = jsonObj.choices[0];
+          if (choice.message && choice.message.content) {
+            return choice.message.content;
+          }
+          if (choice.text) return choice.text;
+        }
+      } catch (e) {
+        // 不是JSON，继续处理
+      }
+
+      // 检查是否是纯文本（没有data:前缀）
+      if (!text.includes('data:')) {
+        return text;
+      }
+      
       // 分割流数据成多行
       const lines = text.split('\n').filter(line => line.trim() !== '');
       
@@ -79,30 +103,66 @@ const CodeReviewUI = () => {
         // 如果行以data:开头
         if (line.startsWith('data:')) {
           try {
-            // 提取data:后面的JSON
-            const jsonStr = line.substring(5).trim();
+            // 提取data:后面的部分
+            const dataStr = line.substring(5).trim();
             // 跳过[DONE]消息
-            if (jsonStr === '[DONE]') continue;
+            if (dataStr === '[DONE]') continue;
             
-            const data = JSON.parse(jsonStr);
-            // 提取内容，通常在choices[0].delta.content中
-            if (data.choices && 
-                data.choices[0] && 
-                data.choices[0].delta && 
-                data.choices[0].delta.content) {
-              fullContent += data.choices[0].delta.content;
+            try {
+              // 尝试解析为JSON
+              const data = JSON.parse(dataStr);
+              // 提取内容，可能在不同位置
+              if (data.choices && data.choices.length > 0) {
+                const choice = data.choices[0];
+                
+                // 处理不同JSON结构
+                if (choice.delta && choice.delta.content) {
+                  fullContent += choice.delta.content;
+                } else if (choice.message && choice.message.content) {
+                  fullContent += choice.message.content;
+                } else if (choice.text) {
+                  fullContent += choice.text;
+                } else if (typeof choice === 'string') {
+                  fullContent += choice;
+                }
+              } else if (data.content) {
+                fullContent += data.content;
+              } else if (data.message) {
+                fullContent += data.message;
+              } else if (data.text) {
+                fullContent += data.text;
+              } else if (typeof data === 'string') {
+                fullContent += data;
+              }
+            } catch (e) {
+              // 如果不是JSON，可能是纯文本
+              fullContent += dataStr;
             }
           } catch (e) {
             console.warn('无法解析行:', line, e);
-            continue;
+            // 尝试直接使用行内容
+            const content = line.replace('data:', '').trim();
+            if (content && content !== '[DONE]') {
+              fullContent += content + ' ';
+            }
           }
         }
       }
       
-      return fullContent || "无法解析响应内容，请查看调试信息";
+      // 如果没有提取到内容，可能是格式不符合预期
+      if (!fullContent.trim()) {
+        // 尝试其他格式或直接返回文本
+        const cleanText = text.replace(/data:\s*\[DONE\]/g, '')
+                              .replace(/data:/g, '')
+                              .trim();
+        return cleanText || "无法解析响应内容，请查看调试信息";
+      }
+      
+      return fullContent;
     } catch (error) {
       console.error("解析流响应时出错:", error);
-      return "解析响应时出错";
+      // 最后尝试直接返回原始文本
+      return text || "解析响应时出错";
     }
   };
 
@@ -123,6 +183,7 @@ const CodeReviewUI = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'text/event-stream, application/json',
         },
         body: JSON.stringify({ 
           messages: [
@@ -138,7 +199,7 @@ const CodeReviewUI = () => {
         throw new Error(`API错误: ${response.status}`);
       }
 
-      // 直接获取文本响应，用于调试
+      // 直接获取文本响应
       const rawText = await response.text();
       setDebugInfo(rawText);
 
@@ -227,26 +288,32 @@ const CodeReviewUI = () => {
         {/* 审查结果 */}
         {result && (
           <div className="chat-bubble">
-            <div className="markdown">
-              <ReactMarkdown
-                components={MarkdownComponents}
-                remarkPlugins={[remarkGfm]}
-              >
-                {result.content}
-              </ReactMarkdown>
-            </div>
+            {/* 纯文本备用显示，以防Markdown无法正确渲染 */}
+            {result.content && !result.content.includes('#') && !result.content.includes('*') && (
+              <div className="whitespace-pre-wrap">{result.content}</div>
+            )}
             
-            {/* 仅在开发环境中显示调试信息按钮 */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="mt-4 border-t border-gray-700 pt-4">
-                <details>
-                  <summary className="cursor-pointer text-gray-400 text-sm">调试信息</summary>
-                  <pre className="mt-2 p-2 bg-gray-950 text-xs text-gray-400 overflow-auto rounded max-h-60">
-                    {debugInfo}
-                  </pre>
-                </details>
+            {/* Markdown渲染 */}
+            {result.content && (result.content.includes('#') || result.content.includes('*')) && (
+              <div className="markdown">
+                <ReactMarkdown
+                  components={MarkdownComponents}
+                  remarkPlugins={[remarkGfm]}
+                >
+                  {result.content}
+                </ReactMarkdown>
               </div>
             )}
+            
+            {/* 调试信息 */}
+            <div className="mt-4 border-t border-gray-700 pt-4">
+              <details>
+                <summary className="cursor-pointer text-gray-400 text-sm">调试信息</summary>
+                <pre className="mt-2 p-2 bg-gray-950 text-xs text-gray-400 overflow-auto rounded max-h-60">
+                  {debugInfo}
+                </pre>
+              </details>
+            </div>
           </div>
         )}
       </div>
