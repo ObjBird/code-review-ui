@@ -61,9 +61,50 @@ const CodeReviewUI = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<CodeReviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
   // API端点
   const API_ENDPOINT = 'https://agent.wskstar.xyz/api/agents/codeReviewAgent/stream';
+
+  // 处理JSON流响应
+  const parseStreamResponse = (text: string): string => {
+    try {
+      // 分割流数据成多行
+      const lines = text.split('\n').filter(line => line.trim() !== '');
+      
+      // 提取每行中的内容部分
+      let fullContent = '';
+      
+      for (const line of lines) {
+        // 如果行以data:开头
+        if (line.startsWith('data:')) {
+          try {
+            // 提取data:后面的JSON
+            const jsonStr = line.substring(5).trim();
+            // 跳过[DONE]消息
+            if (jsonStr === '[DONE]') continue;
+            
+            const data = JSON.parse(jsonStr);
+            // 提取内容，通常在choices[0].delta.content中
+            if (data.choices && 
+                data.choices[0] && 
+                data.choices[0].delta && 
+                data.choices[0].delta.content) {
+              fullContent += data.choices[0].delta.content;
+            }
+          } catch (e) {
+            console.warn('无法解析行:', line, e);
+            continue;
+          }
+        }
+      }
+      
+      return fullContent || "无法解析响应内容，请查看调试信息";
+    } catch (error) {
+      console.error("解析流响应时出错:", error);
+      return "解析响应时出错";
+    }
+  };
 
   // 提交代码进行审查
   const submitCodeForReview = async () => {
@@ -75,6 +116,7 @@ const CodeReviewUI = () => {
     try {
       setLoading(true);
       setError(null);
+      setDebugInfo(null);
       
       // 调用API
       const response = await fetch(API_ENDPOINT, {
@@ -96,32 +138,16 @@ const CodeReviewUI = () => {
         throw new Error(`API错误: ${response.status}`);
       }
 
-      // 处理Stream响应
-      const reader = response.body?.getReader();
-      let decoder = new TextDecoder();
-      let data = '';
+      // 直接获取文本响应，用于调试
+      const rawText = await response.text();
+      setDebugInfo(rawText);
 
-      if (reader) {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            // 解码并添加到累积的数据中
-            const chunk = decoder.decode(value, { stream: true });
-            data += chunk;
-          }
-        } finally {
-          reader.releaseLock();
-        }
-      }
-
-      // 处理响应数据
-      if (data) {
-        setResult({ content: data });
-      } else {
-        throw new Error('未收到有效的响应数据');
-      }
+      // 解析响应
+      const parsedContent = parseStreamResponse(rawText);
+      
+      // 设置结果
+      setResult({ content: parsedContent });
+      
     } catch (err) {
       console.error('请求错误:', err);
       setError(`请求失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -209,6 +235,18 @@ const CodeReviewUI = () => {
                 {result.content}
               </ReactMarkdown>
             </div>
+            
+            {/* 仅在开发环境中显示调试信息按钮 */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-4 border-t border-gray-700 pt-4">
+                <details>
+                  <summary className="cursor-pointer text-gray-400 text-sm">调试信息</summary>
+                  <pre className="mt-2 p-2 bg-gray-950 text-xs text-gray-400 overflow-auto rounded max-h-60">
+                    {debugInfo}
+                  </pre>
+                </details>
+              </div>
+            )}
           </div>
         )}
       </div>
