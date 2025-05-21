@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 
 // 定义代码审查结果的接口
@@ -9,62 +9,16 @@ interface CodeReviewResult {
   score?: number;
 }
 
-// 环境变量配置，开发环境中使用代理，生产环境使用实际URL
-const API_BASE_URL = process.env.NODE_ENV === 'development' 
-  ? '/api' // 使用/api前缀，将通过代理转发
-  : (process.env.API_URL || 'https://ccc.zhanglong116033.workers.dev');
-
-// 尝试不同的API端点，以解决404问题
-const API_ENDPOINTS = [
-  `${API_BASE_URL}`,               // 直接调用根路径
-  `${API_BASE_URL}/api/review`,    // api/review路径
-  `${API_BASE_URL}/review`,        // review路径
-  `${API_BASE_URL}/code-review`    // code-review路径
-];
+// 固定API端点URL
+const API_ENDPOINT = 'https://agent.wskstar.xyz/api/agents/codeReviewAgent/stream';
 
 const CodeReviewUI = () => {
   const [code, setCode] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<CodeReviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeEndpoint, setActiveEndpoint] = useState<string>(API_ENDPOINTS[0]);
-  const [testResults, setTestResults] = useState<{[key: string]: string}>({});
-  const [testingEndpoints, setTestingEndpoints] = useState<boolean>(false);
 
-  // 测试所有可能的接口端点
-  useEffect(() => {
-    const testEndpoints = async () => {
-      if (!testingEndpoints) return;
-      
-      const results: {[key: string]: string} = {};
-      
-      for (const endpoint of API_ENDPOINTS) {
-        try {
-          const response = await fetch(endpoint, {
-            method: 'OPTIONS',
-            headers: {
-              'Content-Type': 'application/json',
-            }
-          });
-          
-          results[endpoint] = `${response.status} - ${response.statusText}`;
-          
-          if (response.ok || response.status === 204 || response.status === 200) {
-            setActiveEndpoint(endpoint);
-          }
-        } catch (err) {
-          results[endpoint] = `错误: ${err instanceof Error ? err.message : String(err)}`;
-        }
-      }
-      
-      setTestResults(results);
-      setTestingEndpoints(false);
-    };
-    
-    testEndpoints();
-  }, [testingEndpoints]);
-
-  // 发送代码到Cloudflare Worker API进行审查
+  // 发送代码到API进行审查
   const submitCodeForReview = async () => {
     if (!code.trim()) {
       setError('请输入代码进行审查');
@@ -75,24 +29,75 @@ const CodeReviewUI = () => {
       setLoading(true);
       setError(null);
       
-      console.log('发送请求到:', activeEndpoint);
+      console.log('发送请求到:', API_ENDPOINT);
       
       // 调用API
-      const response = await fetch(activeEndpoint, {
+      const response = await fetch(API_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ 
+          messages: [
+            {
+              role: "user",
+              content: `请对以下代码进行审查并提供改进建议：\n\n${code}`
+            }
+          ] 
+        }),
       });
 
       if (!response.ok) {
         throw new Error(`API错误: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('收到响应:', data);
-      setResult(data);
+      // 处理Stream响应
+      const reader = response.body?.getReader();
+      let decoder = new TextDecoder();
+      let data = '';
+      let partialChunk = '';
+
+      if (reader) {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            // 解码并添加到累积的数据中
+            const chunk = decoder.decode(value, { stream: true });
+            data += chunk;
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }
+
+      // 处理响应数据
+      if (data) {
+        // 简单处理为评审结果
+        const reviewResult: CodeReviewResult = {
+          status: 'success',
+          message: data,
+          suggestions: [],
+        };
+        
+        // 尝试提取建议（简单实现，实际中可能需要更复杂的解析）
+        const suggestionMatch = data.match(/建议：([\s\S]*?)(?=$|总结：)/i);
+        if (suggestionMatch && suggestionMatch[1]) {
+          const suggestions = suggestionMatch[1]
+            .split(/\d+[.、）\)\.]/)
+            .filter(item => item.trim().length > 0)
+            .map(item => item.trim());
+          
+          if (suggestions.length > 0) {
+            reviewResult.suggestions = suggestions;
+          }
+        }
+        
+        setResult(reviewResult);
+      } else {
+        throw new Error('未收到有效的响应数据');
+      }
     } catch (err) {
       console.error('请求错误:', err);
       setError(`请求失败: ${err instanceof Error ? err.message : String(err)}`);
@@ -108,44 +113,10 @@ const CodeReviewUI = () => {
       
       <div className="flex flex-col space-y-2">
         <div className="flex justify-between items-center">
-          <label htmlFor="endpoint-select" className="font-medium text-gray-700">
-            当前API端点:
-          </label>
-          <select 
-            id="endpoint-select"
-            className="py-1 px-2 border border-gray-300 rounded text-sm"
-            value={activeEndpoint}
-            onChange={(e) => setActiveEndpoint(e.target.value)}
-          >
-            {API_ENDPOINTS.map((endpoint, index) => (
-              <option key={index} value={endpoint}>
-                {endpoint}
-              </option>
-            ))}
-          </select>
-          <button 
-            onClick={() => setTestingEndpoints(true)}
-            className="bg-gray-200 text-gray-700 py-1 px-3 rounded text-sm hover:bg-gray-300"
-          >
-            测试端点
-          </button>
+          <span className="font-medium text-gray-700">
+            API端点: <span className="font-mono text-sm">{API_ENDPOINT}</span>
+          </span>
         </div>
-        
-        {Object.keys(testResults).length > 0 && (
-          <div className="bg-gray-50 p-3 rounded border border-gray-200 text-sm">
-            <h3 className="font-medium mb-2">端点测试结果:</h3>
-            <ul className="space-y-1">
-              {Object.entries(testResults).map(([endpoint, result], index) => (
-                <li key={index} className="flex">
-                  <span className="font-mono">{endpoint}:</span>
-                  <span className={`ml-2 ${result.startsWith('2') || result === '204 - No Content' ? 'text-green-600' : 'text-red-600'}`}>
-                    {result}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
         
         <label htmlFor="code-input" className="font-medium text-gray-700 mt-4">
           输入代码:
@@ -187,7 +158,7 @@ const CodeReviewUI = () => {
               <AlertCircle className="w-6 h-6 text-amber-500 mr-2" />
             )}
             <h2 className="text-xl font-semibold text-gray-800">
-              {result.status === 'success' ? '代码审查通过' : '代码需要改进'}
+              {result.status === 'success' ? '代码审查完成' : '代码需要改进'}
             </h2>
             {result.score !== undefined && (
               <span className="ml-auto text-lg font-bold bg-gray-100 px-3 py-1 rounded-full">
@@ -197,13 +168,15 @@ const CodeReviewUI = () => {
           </div>
 
           <div className="mb-4">
-            <h3 className="font-medium mb-2 text-gray-700">总体评价:</h3>
-            <p className="text-gray-700 bg-white p-3 rounded-md border border-gray-200">{result.message}</p>
+            <h3 className="font-medium mb-2 text-gray-700">审查结果:</h3>
+            <div className="text-gray-700 bg-white p-3 rounded-md border border-gray-200 whitespace-pre-wrap">
+              {result.message}
+            </div>
           </div>
 
           {result.suggestions && result.suggestions.length > 0 && (
             <div>
-              <h3 className="font-medium mb-2 text-gray-700">改进建议:</h3>
+              <h3 className="font-medium mb-2 text-gray-700">主要建议:</h3>
               <ul className="list-disc pl-5 space-y-2">
                 {result.suggestions.map((suggestion, index) => (
                   <li key={index} className="text-gray-700">
