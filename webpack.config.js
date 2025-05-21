@@ -131,17 +131,12 @@ module.exports = (env, argv) => {
       port: 3000,
       hot: true,
       open: true,
-      // 更新代理配置，保留路径
+      // 更新代理配置
       proxy: {
-        '/api/review': {
-          target: 'https://ccc.zhanglong116033.workers.dev',
-          pathRewrite: { '^/api': '' },
-          changeOrigin: true
-        },
         '/api': {
-          target: 'https://ccc.zhanglong116033.workers.dev',
-          pathRewrite: { '^/api': '' },
-          changeOrigin: true
+          target: 'https://agent.wskstar.xyz',
+          changeOrigin: true,
+          secure: false
         }
       }
     },
