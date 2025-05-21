@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 
 // 定义代码审查结果的接口
@@ -14,19 +14,55 @@ const API_BASE_URL = process.env.NODE_ENV === 'development'
   ? '/api' // 使用/api前缀，将通过代理转发
   : (process.env.API_URL || 'https://ccc.zhanglong116033.workers.dev');
 
-// 移除末尾斜杠以防止路径问题
-const cleanBaseUrl = API_BASE_URL.endsWith('/') 
-  ? API_BASE_URL.slice(0, -1) 
-  : API_BASE_URL;
-
-// 完整的API接口端点
-const API_ENDPOINT = `${cleanBaseUrl}/api/review`;
+// 尝试不同的API端点，以解决404问题
+const API_ENDPOINTS = [
+  `${API_BASE_URL}`,               // 直接调用根路径
+  `${API_BASE_URL}/api/review`,    // api/review路径
+  `${API_BASE_URL}/review`,        // review路径
+  `${API_BASE_URL}/code-review`    // code-review路径
+];
 
 const CodeReviewUI = () => {
   const [code, setCode] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<CodeReviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeEndpoint, setActiveEndpoint] = useState<string>(API_ENDPOINTS[0]);
+  const [testResults, setTestResults] = useState<{[key: string]: string}>({});
+  const [testingEndpoints, setTestingEndpoints] = useState<boolean>(false);
+
+  // 测试所有可能的接口端点
+  useEffect(() => {
+    const testEndpoints = async () => {
+      if (!testingEndpoints) return;
+      
+      const results: {[key: string]: string} = {};
+      
+      for (const endpoint of API_ENDPOINTS) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'OPTIONS',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          });
+          
+          results[endpoint] = `${response.status} - ${response.statusText}`;
+          
+          if (response.ok || response.status === 204 || response.status === 200) {
+            setActiveEndpoint(endpoint);
+          }
+        } catch (err) {
+          results[endpoint] = `错误: ${err instanceof Error ? err.message : String(err)}`;
+        }
+      }
+      
+      setTestResults(results);
+      setTestingEndpoints(false);
+    };
+    
+    testEndpoints();
+  }, [testingEndpoints]);
 
   // 发送代码到Cloudflare Worker API进行审查
   const submitCodeForReview = async () => {
@@ -39,10 +75,10 @@ const CodeReviewUI = () => {
       setLoading(true);
       setError(null);
       
-      console.log('发送请求到:', API_ENDPOINT);
+      console.log('发送请求到:', activeEndpoint);
       
       // 调用API
-      const response = await fetch(API_ENDPOINT, {
+      const response = await fetch(activeEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,7 +107,47 @@ const CodeReviewUI = () => {
       <h1 className="text-2xl font-bold text-center text-gray-800">代码审查工具</h1>
       
       <div className="flex flex-col space-y-2">
-        <label htmlFor="code-input" className="font-medium text-gray-700">
+        <div className="flex justify-between items-center">
+          <label htmlFor="endpoint-select" className="font-medium text-gray-700">
+            当前API端点:
+          </label>
+          <select 
+            id="endpoint-select"
+            className="py-1 px-2 border border-gray-300 rounded text-sm"
+            value={activeEndpoint}
+            onChange={(e) => setActiveEndpoint(e.target.value)}
+          >
+            {API_ENDPOINTS.map((endpoint, index) => (
+              <option key={index} value={endpoint}>
+                {endpoint}
+              </option>
+            ))}
+          </select>
+          <button 
+            onClick={() => setTestingEndpoints(true)}
+            className="bg-gray-200 text-gray-700 py-1 px-3 rounded text-sm hover:bg-gray-300"
+          >
+            测试端点
+          </button>
+        </div>
+        
+        {Object.keys(testResults).length > 0 && (
+          <div className="bg-gray-50 p-3 rounded border border-gray-200 text-sm">
+            <h3 className="font-medium mb-2">端点测试结果:</h3>
+            <ul className="space-y-1">
+              {Object.entries(testResults).map(([endpoint, result], index) => (
+                <li key={index} className="flex">
+                  <span className="font-mono">{endpoint}:</span>
+                  <span className={`ml-2 ${result.startsWith('2') || result === '204 - No Content' ? 'text-green-600' : 'text-red-600'}`}>
+                    {result}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        
+        <label htmlFor="code-input" className="font-medium text-gray-700 mt-4">
           输入代码:
         </label>
         <textarea
@@ -125,7 +201,7 @@ const CodeReviewUI = () => {
             <p className="text-gray-700 bg-white p-3 rounded-md border border-gray-200">{result.message}</p>
           </div>
 
-          {result.suggestions.length > 0 && (
+          {result.suggestions && result.suggestions.length > 0 && (
             <div>
               <h3 className="font-medium mb-2 text-gray-700">改进建议:</h3>
               <ul className="list-disc pl-5 space-y-2">
