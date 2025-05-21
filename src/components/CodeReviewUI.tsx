@@ -1,26 +1,71 @@
 import React, { useState } from 'react';
-import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-// 定义代码审查结果的接口
+// 代码审查结果的接口
 interface CodeReviewResult {
-  status: 'success' | 'error';
-  message: string;
-  suggestions: string[];
-  score?: number;
+  content: string;
 }
 
-// 固定API端点URL
-const API_ENDPOINT = 'https://agent.wskstar.xyz/api/agents/codeReviewAgent/stream';
+// 代理人信息组件
+const AgentInfo = () => (
+  <div className="flex items-center mb-4">
+    <div className="bg-gray-700 w-8 h-8 rounded-full flex items-center justify-center mr-3">
+      <span className="text-white font-bold">M</span>
+    </div>
+    <div className="text-gray-300 font-medium">Mastra Agent</div>
+  </div>
+);
 
+// 欢迎消息组件
+const WelcomeMessage = () => (
+  <div className="chat-bubble mb-6">
+    <p className="mb-3">感谢您的提问！作为代码审查助手，我需要看到具体的代码才能提供有价值的反馈。您能否提供以下信息：</p>
+    
+    <p className="text-gray-400 mb-2">[请求信息]</p>
+    <ol className="chat-list mb-4">
+      <li className="chat-list-item">您希望审查的代码片段（可以是函数、类或模块）</li>
+      <li className="chat-list-item">代码使用的编程语言</li>
+      <li className="chat-list-item">代码的预期功能或业务逻辑</li>
+      <li className="chat-list-item">任何特定的关注点（如性能、安全性等）</li>
+    </ol>
+    
+    <p className="mb-3">例如，您可以这样提供：</p>
+    
+    <div className="code-block">
+      <code>
+{`# Python示例 - 用户认证模块
+def authenticate_user(username, password):
+    user = db.query(User).filter_by(username=username).first()
+    if user and check_password(password, user.password_hash):
+        return user
+    return None`}
+      </code>
+    </div>
+    
+    <p className="mb-2">这样我就能为您提供：</p>
+    <ol className="chat-list">
+      <li className="chat-list-item">具体的代码质量评估</li>
+      <li className="chat-list-item">针对该语言的最佳实践建议</li>
+      <li className="chat-list-item">相关的安全性和性能分析</li>
+    </ol>
+    
+    <p className="mt-3">期待看到您的代码！</p>
+  </div>
+);
+
+// 主组件
 const CodeReviewUI = () => {
   const [code, setCode] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<CodeReviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // 发送代码到API进行审查
+  // API端点
+  const API_ENDPOINT = 'https://agent.wskstar.xyz/api/agents/codeReviewAgent/stream';
+
+  // 提交代码进行审查
   const submitCodeForReview = async () => {
     if (!code.trim()) {
       setError('请输入代码进行审查');
@@ -30,8 +75,6 @@ const CodeReviewUI = () => {
     try {
       setLoading(true);
       setError(null);
-      
-      console.log('发送请求到:', API_ENDPOINT);
       
       // 调用API
       const response = await fetch(API_ENDPOINT, {
@@ -75,27 +118,7 @@ const CodeReviewUI = () => {
 
       // 处理响应数据
       if (data) {
-        // 简单处理为评审结果
-        const reviewResult: CodeReviewResult = {
-          status: 'success',
-          message: data,
-          suggestions: [],
-        };
-        
-        // 尝试提取建议（简单实现，实际中可能需要更复杂的解析）
-        const suggestionMatch = data.match(/建议：([\s\S]*?)(?=$|总结：)/i);
-        if (suggestionMatch && suggestionMatch[1]) {
-          const suggestions = suggestionMatch[1]
-            .split(/\d+[.、）\)\.]/)
-            .filter(item => item.trim().length > 0)
-            .map(item => item.trim());
-          
-          if (suggestions.length > 0) {
-            reviewResult.suggestions = suggestions;
-          }
-        }
-        
-        setResult(reviewResult);
+        setResult({ content: data });
       } else {
         throw new Error('未收到有效的响应数据');
       }
@@ -110,149 +133,85 @@ const CodeReviewUI = () => {
 
   // 自定义Markdown组件
   const MarkdownComponents = {
-    // 自定义代码块渲染
     code({ node, inline, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || '');
       
       if (!inline && match) {
         return (
-          <div className="overflow-auto rounded-md my-2">
-            <pre className={`bg-gray-800 text-white overflow-auto p-3 rounded-md text-sm ${className}`} {...props}>
-              <code className={`language-${match[1]}`}>{children}</code>
-            </pre>
+          <div className="code-block">
+            <code className={className} {...props}>
+              {children}
+            </code>
           </div>
         );
       }
       
       return inline ? (
-        <code className="bg-gray-100 text-red-600 px-1 py-0.5 rounded-sm text-sm" {...props}>
+        <code className="inline-code" {...props}>
           {children}
         </code>
       ) : (
-        <pre className="bg-gray-100 overflow-auto p-3 rounded-md my-2 text-sm" {...props}>
-          <code>{children}</code>
-        </pre>
+        <div className="code-block">
+          <code {...props}>{children}</code>
+        </div>
       );
-    },
-    // 自定义标题样式
-    h1: ({ node, children, ...props }: any) => (
-      <h1 className="text-2xl font-bold my-4" {...props}>{children}</h1>
-    ),
-    h2: ({ node, children, ...props }: any) => (
-      <h2 className="text-xl font-bold my-3" {...props}>{children}</h2>
-    ),
-    h3: ({ node, children, ...props }: any) => (
-      <h3 className="text-lg font-bold my-2" {...props}>{children}</h3>
-    ),
-    // 自定义列表样式
-    ul: ({ node, children, ...props }: any) => (
-      <ul className="list-disc pl-5 my-2" {...props}>{children}</ul>
-    ),
-    ol: ({ node, children, ...props }: any) => (
-      <ol className="list-decimal pl-5 my-2" {...props}>{children}</ol>
-    ),
-    li: ({ node, children, ...props }: any) => (
-      <li className="my-1" {...props}>{children}</li>
-    ),
-    // 自定义段落样式
-    p: ({ node, children, ...props }: any) => (
-      <p className="my-2" {...props}>{children}</p>
-    ),
-    // 自定义表格样式
-    table: ({ node, children, ...props }: any) => (
-      <div className="overflow-auto my-2">
-        <table className="min-w-full border border-gray-300" {...props}>{children}</table>
-      </div>
-    ),
-    thead: ({ node, children, ...props }: any) => (
-      <thead className="bg-gray-100" {...props}>{children}</thead>
-    ),
-    th: ({ node, children, ...props }: any) => (
-      <th className="py-2 px-4 border-b border-gray-300 text-left font-semibold" {...props}>{children}</th>
-    ),
-    td: ({ node, children, ...props }: any) => (
-      <td className="py-2 px-4 border-b border-gray-300" {...props}>{children}</td>
-    ),
-    // 自定义块引用样式
-    blockquote: ({ node, children, ...props }: any) => (
-      <blockquote className="border-l-4 border-gray-300 pl-4 py-1 my-2 text-gray-700 italic" {...props}>{children}</blockquote>
-    ),
+    }
   };
 
   return (
-    <div className="flex flex-col w-full max-w-4xl mx-auto p-6 space-y-6 bg-white rounded-lg shadow-lg">
-      <h1 className="text-2xl font-bold text-center text-gray-800">代码审查工具</h1>
-      
-      <div className="flex flex-col space-y-2">
-        <div className="flex justify-between items-center">
-          <span className="font-medium text-gray-700">
-            API端点: <span className="font-mono text-sm">{API_ENDPOINT}</span>
-          </span>
+    <div className="min-h-screen bg-gray-900 text-gray-200 py-6 px-4">
+      <div className="max-w-4xl mx-auto">
+        {/* 代理人信息 */}
+        <AgentInfo />
+        
+        {/* 欢迎消息 */}
+        {!result && !loading && <WelcomeMessage />}
+        
+        {/* 代码输入区域 */}
+        <div className="chat-bubble mb-6">
+          <h2 className="text-lg font-medium mb-3">输入您要审查的代码：</h2>
+          <textarea
+            className="w-full h-64 bg-gray-950 text-gray-200 p-4 rounded-md font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="// 在这里粘贴您的代码..."
+          />
+          
+          <div className="flex justify-end">
+            <button
+              onClick={submitCodeForReview}
+              disabled={loading}
+              className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-6 rounded-md flex items-center justify-center disabled:opacity-50 transition-colors"
+            >
+              {loading ? (
+                <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> 正在分析...</>
+              ) : (
+                '提交审查'
+              )}
+            </button>
+          </div>
+          
+          {error && (
+            <div className="mt-4 p-3 bg-red-900/50 border border-red-700 rounded-md text-red-300">
+              {error}
+            </div>
+          )}
         </div>
         
-        <label htmlFor="code-input" className="font-medium text-gray-700 mt-4">
-          输入代码:
-        </label>
-        <textarea
-          id="code-input"
-          className="w-full h-64 p-4 border border-gray-300 rounded-md font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="在这里粘贴您的代码..."
-        />
-      </div>
-
-      <button
-        onClick={submitCodeForReview}
-        disabled={loading}
-        className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md flex items-center justify-center disabled:opacity-50 transition-colors"
-      >
-        {loading ? (
-          <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> 正在分析...</>
-        ) : (
-          '提交代码审查'
-        )}
-      </button>
-
-      {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-md flex items-start">
-          <AlertCircle className="w-5 h-5 text-red-500 mr-2 flex-shrink-0" />
-          <p className="text-red-700">{error}</p>
-        </div>
-      )}
-
-      {result && (
-        <div className="mt-6 border border-gray-200 rounded-lg p-6 bg-gray-50">
-          <div className="flex items-center mb-4">
-            {result.status === 'success' ? (
-              <CheckCircle className="w-6 h-6 text-green-500 mr-2" />
-            ) : (
-              <AlertCircle className="w-6 h-6 text-amber-500 mr-2" />
-            )}
-            <h2 className="text-xl font-semibold text-gray-800">
-              {result.status === 'success' ? '代码审查完成' : '代码需要改进'}
-            </h2>
-            {result.score !== undefined && (
-              <span className="ml-auto text-lg font-bold bg-gray-100 px-3 py-1 rounded-full">
-                得分: {result.score}/100
-              </span>
-            )}
-          </div>
-
-          <div className="mb-4">
-            <h3 className="font-medium mb-2 text-gray-700">审查结果:</h3>
-            <div className="bg-white p-4 rounded-md border border-gray-200">
-              <ReactMarkdown 
-                components={MarkdownComponents} 
+        {/* 审查结果 */}
+        {result && (
+          <div className="chat-bubble">
+            <div className="markdown">
+              <ReactMarkdown
+                components={MarkdownComponents}
                 remarkPlugins={[remarkGfm]}
-                className="prose max-w-none"
               >
-                {result.message}
+                {result.content}
               </ReactMarkdown>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
