@@ -10,9 +10,17 @@ interface CodeReviewResult {
 }
 
 // 环境变量配置，开发环境中使用代理，生产环境使用实际URL
-const API_URL = process.env.NODE_ENV === 'development' 
-  ? '/api' // 使用/api前缀，将通过代理转发到http://localhost:8787
-  : (process.env.API_URL || 'https://ccc.zhanglong116033.workers.dev/');
+const API_BASE_URL = process.env.NODE_ENV === 'development' 
+  ? '/api' // 使用/api前缀，将通过代理转发
+  : (process.env.API_URL || 'https://ccc.zhanglong116033.workers.dev');
+
+// 移除末尾斜杠以防止路径问题
+const cleanBaseUrl = API_BASE_URL.endsWith('/') 
+  ? API_BASE_URL.slice(0, -1) 
+  : API_BASE_URL;
+
+// 完整的API接口端点
+const API_ENDPOINT = `${cleanBaseUrl}/api/review`;
 
 const CodeReviewUI = () => {
   const [code, setCode] = useState<string>('');
@@ -31,11 +39,10 @@ const CodeReviewUI = () => {
       setLoading(true);
       setError(null);
       
-      console.log('发送请求到:', API_URL);
+      console.log('发送请求到:', API_ENDPOINT);
       
       // 调用API
-      // 在开发环境中，这个请求会被代理到http://localhost:8787
-      const response = await fetch(API_URL, {
+      const response = await fetch(API_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
