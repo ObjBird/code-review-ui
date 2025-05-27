@@ -64,7 +64,8 @@ const CodeReviewUI = () => {
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
   // API端点
-  const API_ENDPOINT = 'https://agent.wskstar.xyz/api/agents/codeReviewAgent/stream';
+  // const API_ENDPOINT = 'https://agent.wskstar.xyz/api/agents/codeReviewAgent/stream';
+  const API_ENDPOINT = 'https://code-review-agent-production.zhanglong116033.workers.dev/';
 
   // 处理JSON流响应
   const parseStreamResponse = (text: string): string => {
